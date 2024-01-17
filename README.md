@@ -16,8 +16,7 @@ Push the image to your container registry (like GitLab).
 Create a secret in Kubernetes cluster for container registry authentication (access token base64 encoded).  
 Reference the secret and the registry image within the deployment .yaml file as well as the cron schedule.  
 
-For a more GitOps approach keep everything within same repository (as now) and let the gitlab CI do the deployment when a push to master happens.  
-Useful if you want to change a schedule or modify details.
+For a more GitOps approach keep everything within same repository (as now) and let the gitlab CI do the deployment when a push to master happens. Useful if you want to change a schedule or modify details.
 
 ### For the Future
 Add part size constrains to limit parts to max 10000 (AWS limitation)  
