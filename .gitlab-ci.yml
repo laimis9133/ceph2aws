@@ -1,0 +1,20 @@
+stages:        
+  - deploy
+
+deploy-job:      
+  stage: deploy  
+  before_script:
+    - mkdir -p ~/.kube
+    - echo ${KUBE_CONFIG} | base64 -d > ~/.kube/config
+    - chmod 700 ~/.kube/config
+  image:
+    name: alpine/k8s:1.25.2
+    entrypoint: ["/bin/sh", "-c"]
+  script:
+    - for f in kubernetes-deployments/*.yaml; do kubectl apply -f $f; done
+  rules:
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+      when: always
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
