@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ceph2aws-yourobject2
+  namespace: your-kubernetes-namespace
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: ceph2aws-yourobject2
+            image: path/to/image/repository/ceph2aws:latest
+            env:
+            - name: ceph_bucket
+              value: "ceph-bucket-name"
+            - name: object_path
+              value: "ceph-object-path"
+            - name: aws_bucket
+              value: "aws-bucket-name"
+            - name: part_size
+              value: "500"
+            - name: max_parallel_processes
+              value: "5"
+            - name: tag
+              value: "your-tag"
+            resources:
+              requests:
+                cpu: "10"
+          restartPolicy: Never
+          imagePullSecrets:
+          - name: your-image-secret
