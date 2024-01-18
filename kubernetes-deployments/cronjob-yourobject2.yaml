@@ -4,7 +4,7 @@ metadata:
   name: ceph2aws-yourobject2
   namespace: your-kubernetes-namespace
 spec:
-  schedule: "* * * * *"
+  schedule: "* 12 * * *"
   jobTemplate:
     spec:
       template:
@@ -25,6 +25,10 @@ spec:
               value: "5"
             - name: tag
               value: "your-tag"
+            - name: max_retries
+              value: "8"
+            - name: chunk_size
+              value: "100"
             resources:
               requests:
                 cpu: "10"
