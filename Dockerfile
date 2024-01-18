@@ -17,5 +17,7 @@ ENV aws_bucket=""
 ENV part_size=""
 ENV max_parallel_processes=""
 ENV tag=""
+ENV max_retries=""
+ENV chunk_size=""
 
-ENTRYPOINT ["sh", "-c", "python /app/s3_multipart_upload.py ${ceph_bucket} ${object_path} ${aws_bucket} ${part_size} ${max_parallel_processes} ${tag}"]
+ENTRYPOINT ["sh", "-c", "python /app/s3_multipart_upload.py ${ceph_bucket} ${object_path} ${aws_bucket} ${part_size} ${max_parallel_processes} ${tag} ${max_retries} ${chunk_size}"]
