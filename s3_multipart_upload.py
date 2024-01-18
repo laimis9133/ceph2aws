@@ -166,17 +166,17 @@ aws_s3_client.complete_multipart_upload(
 )
 
 # Optional: add tag to the uploaded object. Useful when setting up lifecycle rules for AWS buckets via tags.
-#aws_s3_client.put_object_tagging(
-#    Bucket=aws_bucket,
-#    Key=object_key,
-#    Tagging={
-#        'TagSet': [
-#            {
-#                'Key': 'YOUR_KEY',
-#                'Value': tag
-#            },
-#        ]
-#    }
-#)
+aws_s3_client.put_object_tagging(
+    Bucket=aws_bucket,
+    Key=object_key,
+    Tagging={
+        'TagSet': [
+            {
+                'Key': 'YOUR_KEY',
+                'Value': tag
+            },
+        ]
+    }
+)
 
 logger.info(f"Multipart upload to AWS {aws_bucket} bucket completed for: {object_key}")
