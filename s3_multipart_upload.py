@@ -10,8 +10,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s: %(m
 logger = logging.getLogger()
 
 if __name__ == "__main__":
-    if len(sys.argv) != 7:
-        logger.error("Usage: python3 this-script.py ceph_bucket object_path aws_bucket part_size(MB) max_parallel_processes tag")
+    if len(sys.argv) != 9:
+        logger.error("Usage: python3 this-script.py ceph_bucket object_path aws_bucket part_size(MB) max_parallel_processes tag max_retries chunk_size")
         sys.exit(1)
 
     ceph_bucket = sys.argv[1]
@@ -20,10 +20,9 @@ if __name__ == "__main__":
     part_size = int(sys.argv[4]) * 1024 * 1024
     max_parallel_processes = int(sys.argv[5])
     tag = sys.argv[6]
-
-# Tweaking params
-max_retries = 5 # Retries in case of network errors
-chunk_size = 100 # Release resources after this number of processes - keep this number lower than OS session open file limit to not run into file descriptor exhaust (useful when uploading very large files)
+    max_retries = int(sys.argv[7]) # Retries in case of network errors
+    chunk_size = int(sys.argv[8]) # Release resources after this number of processes. Keep lower than open file limit to avoid file descriptor exhaust w/ large files. 
+    # Just set to "100" if you dont know.
 
 # Configure Ceph and AWS S3 clients
 ceph_s3_client = boto3.Session(profile_name='ceph').client('s3')
