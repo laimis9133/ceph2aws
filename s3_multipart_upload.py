@@ -55,6 +55,7 @@ else:
 
 # Get exact object name to upload
 object_key = find_latest_file(ceph_bucket, object_path, file_pattern)
+# object_key = object_path  ## Remove lines 31-57 and uncomment first '#' on this line if you dont need filepath and date timestamp details
 logger.info(f"Found latest object to upload: {object_key}")
 
 # Function to get and upload object split into parts - read and write logic here
