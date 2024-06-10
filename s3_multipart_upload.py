@@ -1,3 +1,6 @@
+## Simple script to upload files with mp from Ceph S3 to AWS S3 via boto3
+## It expects the following file/object naming pattern: ceph_bukcet/object_path/object_name_with_date_YYYY_MM_DD
+
 import boto3
 import sys
 import logging
@@ -10,8 +13,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s: %(m
 logger = logging.getLogger()
 
 if __name__ == "__main__":
-    if len(sys.argv) != 9:
-        logger.error("Usage: python3 this-script.py ceph_bucket object_path aws_bucket part_size(MB) max_parallel_processes tag max_retries chunk_size")
+    if len(sys.argv) != 7:
+        logger.error("Usage: python3 this-script.py ceph_bucket object_path aws_bucket part_size(MB) max_parallel_processes tag")
         sys.exit(1)
 
     ceph_bucket = sys.argv[1]
@@ -20,17 +23,18 @@ if __name__ == "__main__":
     part_size = int(sys.argv[4]) * 1024 * 1024
     max_parallel_processes = int(sys.argv[5])
     tag = sys.argv[6]
-    max_retries = int(sys.argv[7]) # Retries in case of network errors
-    chunk_size = int(sys.argv[8]) # Release resources after this number of processes. Keep lower than open file limit to avoid file descriptor exhaust w/ large files. 
-    # Just set to "100" if you dont know.
 
-# Configure Ceph and AWS S3 clients
-ceph_s3_client = boto3.Session(profile_name='ceph').client('s3')
-aws_s3_client = boto3.Session(profile_name='aws').client('s3')
+# Tweaking params
+max_retries = 5 # Retries for network errors
+chunk_size = 100 #AKA maximum number of completed processes before releasing resources (keep less than OS open file limit - required for massive (TB) files)
+ceph_s3_client = boto3.Session(profile_name='ceph').client('s3') # Requires aws-cli with Ceph bucket keys in .aws/credentials
+aws_s3_client = boto3.Session(profile_name='default').client('s3') # Requires aws-cli with AWS bucket keys in .aws/credentials
 
-# Function to get latest object_key from path. IMPORTANT: its according to date in object/file name, not general creation time!
+
+# Functions
+# Function to get latest object_key from path (according to date in object name, not creation time)
 def find_latest_file(bucket, directory, file_pattern):
-    # List all objects in bucket with the specified prefix
+    # List all objects in the bucket with the specified prefix
     response = ceph_s3_client.list_objects_v2(
         Bucket=bucket,
         Prefix=f"{directory}/"
@@ -45,20 +49,7 @@ def find_latest_file(bucket, directory, file_pattern):
     latest_file = max(files, key=lambda x: re.search(r'\d{4}-\d{2}-\d{2}', x).group())
     return latest_file
 
-# Ajustment for various name patterns. Use this if you have different filename patterns across different locations
-if object_path == 'your-path':
-    file_pattern = 'your-filename-pattern'
-elif object_path == 'your-other-path':
-    file_pattern = 'your-other-filename-pattern'
-else:
-    file_pattern = 'default-filename-pattern'
-
-# Get exact object name to upload
-object_key = find_latest_file(ceph_bucket, object_path, file_pattern)
-# object_key = object_path  ## Remove lines 31-57 and uncomment first '#' on this line if you dont need filepath and date timestamp details
-logger.info(f"Found latest object to upload: {object_key}")
-
-# Function to get and upload object split into parts - read and write logic here
+# Function to get and upload object split into parts - read and write logic is here
 def process_part_number(part_number, part_size, ceph_bucket, object_key, upload_id, manager_dict, semaphore):
     start_byte = (part_number - 1) * part_size
     end_byte = min(part_number * part_size - 1, total_size - 1)
@@ -105,28 +96,7 @@ def process_part_number(part_number, part_size, ceph_bucket, object_key, upload_
                 logger.error(f"Max retries reached. Upload failed for part {part_number}. Error: {e}")
                 sys.exit()
 
-    semaphore.release()
-
-
-# Get source object total size
-metadata_response = ceph_s3_client.head_object(Bucket=ceph_bucket, Key=object_key)
-total_size = metadata_response['ContentLength']
-logger.info(f"Found object metadata. Object size: {total_size}")
-
-# Initiate the multipart upload on AWS S3
-logger.info(f"Starting multipart upload for {object_key} from Ceph {ceph_bucket} bucket to AWS {aws_bucket} bucket.")
-logger.info(f"Will use configured {sys.argv[4]}MB as single part size with {max_parallel_processes} parallel threads.")
-response = aws_s3_client.create_multipart_upload(
-    Bucket=aws_bucket,
-    Key=object_key
-)
-upload_id = response['UploadId']
-logger.info(f"Created multipart request with Upload ID: {upload_id}")
-
-# Set an empty ETag list. Set Manager to gather lists from processes
-etag_list = []
-manager = Manager()
-etag_manager_dict = manager.dict()
+    semaphore.release() # Parallelism for faster upload
 
 # Multiprocessing - launch parallel processes, control max with semaphore
 def create_and_run_processes(start_part_number, end_part_number):
@@ -143,19 +113,58 @@ def create_and_run_processes(start_part_number, end_part_number):
         process.close()
     logger.info(f"Releasing resources after part number {end_part_number}.")
 
-# Split total object parts into chunks - to close processes and release resources after each chunk
+
+# Final adjustment for various backup name patterns
+# This is just re-use same code (container) for multiple services
+# Just set file_pattern = 'object_name' if not required
+if object_path == 'foo':
+    file_pattern = 'bar'
+elif object_path == 'foo2':
+    file_pattern = 'bar2'
+else:
+    file_pattern = 'backup' # Some default backup naming pattern
+
+
+
+
+# Ok. Actual execution starts here
+# Get exact object name to upload
+object_key = find_latest_file(ceph_bucket, object_path, file_pattern)
+logger.info(f"Found latest object to upload: {object_key}")
+
+# Get source object total size
+metadata_response = ceph_s3_client.head_object(Bucket=ceph_bucket, Key=object_key)
+total_size = metadata_response['ContentLength']
+logger.info(f"Found object metadata. Object size: {total_size}")
+
+# Initiate the multipart upload on AWS S3
+logger.info(f"Starting multipart upload for {object_key} from Ceph {ceph_bucket} bucket to AWS {aws_bucket} bucket.")
+logger.info(f"Will use configured {sys.argv[4]}MB ({part_size}B) as single part size with {max_parallel_processes} parallel threads.")
+response = aws_s3_client.create_multipart_upload(
+    Bucket=aws_bucket,
+    Key=object_key
+)
+upload_id = response['UploadId']
+logger.info(f"Created multipart request with Upload ID: {upload_id}")
+
+# Set an empty ETag list and set Manager to gather lists from processes. This is required for AWS multipart uploads.
+etag_list = []
+manager = Manager()
+etag_manager_dict = manager.dict()
+
+# Split total object parts into chunks and then upload it
 total_chunks = (total_size // part_size) // chunk_size
 for chunk in range(total_chunks):
     start_part_number = chunk * chunk_size + 1
     end_part_number = (chunk + 1) * chunk_size + 1
     create_and_run_processes(start_part_number, end_part_number)
 
-# Remaining that don't fit into a full chunk
+# Handle (upload) remaining object bites that don't fit nicely into a full chunk 
 remaining_start_part_number = total_chunks * chunk_size + 1
 remaining_end_part_number = int(total_size / part_size) + 2
 create_and_run_processes(remaining_start_part_number, remaining_end_part_number)
 
-# Sort ETags - required to complete multipart upload
+# Sort ETags - required for AWS to complete multipart upload
 etag_manager_dict_sorted = dict(sorted(etag_manager_dict.items(), key=lambda item: item[1]['PartNumber']))
 
 # Complete the multipart upload
@@ -166,14 +175,14 @@ aws_s3_client.complete_multipart_upload(
     MultipartUpload={'Parts': [{'PartNumber': key, 'ETag': value['ETag']} for key, value in etag_manager_dict_sorted.items()]}
 )
 
-# Optional: add tag to the uploaded object. Useful when setting up lifecycle rules for AWS buckets via tags.
+# Add tag to the uploaded object - for any AWS S3 lifecycle rules based on tags
 aws_s3_client.put_object_tagging(
     Bucket=aws_bucket,
     Key=object_key,
     Tagging={
         'TagSet': [
             {
-                'Key': 'YOUR_KEY',
+                'Key': 'GLACIER_AFTER',
                 'Value': tag
             },
         ]
