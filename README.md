@@ -9,7 +9,7 @@ You can setup scheduled uploads using Kubernetes cronjobs and customize details 
 For single upload use the python script with the following variables:  
 `python3 s3_multipart_upload.py ceph_bucket object_path aws_bucket part_size(MB) max_parallel_processes tag max_retries chunk_size`  
 Keep chunk size 100 as default if you dont know yet what to do.  
-Tweak object name patterns within the .py script to suit your case. Script expects objects to contain YYYY-MM-DD dateformat within their name and searches for a latest file/object based on that. If thats not needed simply remove [lines 31-57](https://github.com/laimis9133/ceph2aws/blob/main/s3_multipart_upload.py#L31-L57) and set `object_key = object_path` instead. This will upload an exact specified file.
+Tweak object name patterns within the .py script to suit your case. Script expects objects to contain YYYY-MM-DD dateformat within their name and searches for a latest file/object based on that. Set `object_key = object_path` in case no you dont need the search through dates.
 
 For Kubernetes cronjob deployment add your Ceph and AWS keys to the credentials file and build a image from Dockerfile.  
 Push the image to your container registry (like GitLab).  
